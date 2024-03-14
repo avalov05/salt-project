@@ -143,7 +143,9 @@ declare -A dInfoNeeded=(
 	["serialNumber:"]="Serial Number:" 
 	["model:"]="Model Number:" 
 	["capacity:"]="Total NVM Capacity:"
-    ["version:"]="Firmware Version:")
+    ["version:"]="Firmware Version:"
+    ["temprature:"]="Temprature"
+    ["healthState:"]="Critical Warning:")
 j=0
 for disk in "${dlist[@]}"
 do
@@ -158,6 +160,14 @@ do
 			elif [ "$key" == "version:" ] ; then
                 echo "df$i$key<${line##*  }>" >> diskInfo.txt
                 echo "df${i}type:<Firmware>" >> diskInfo.txt
+            elif [ "$key" == "healthState:" ] ; then 
+                if [ "${line##*  }" == "0x00" ] ; then
+                    echo "d$i$key<OK>" >> diskInfo.txt
+                elif  [ "${line##*  }" == "" ] ; then
+                    echo "d$i$key<N/A>" >> diskInfo.txt
+                else
+                    echo "d$i$key<NG>" >> diskInfo.txt
+                fi
             else
 				echo "d$i$key<${line##*  }>" >> diskInfo.txt 
 			fi
@@ -166,7 +176,7 @@ do
 				echo "d${i}manufacturer:<$line>" >> diskInfo.txt
             fi
 			let "i++"
-		done <<< "$(sudo smartctl -i /dev/${disk} | grep "${dInfoNeeded[$key]}")"
+		done <<< "$(sudo smartctl -a /dev/${disk} | grep "${dInfoNeeded[$key]}")"
 	done
 	let "j++"
 done
@@ -188,7 +198,7 @@ i=0
 mlist=()
 while read -r line 
 do
-	if [ "${line##* }" != "Specified" ]; then
+	if [ "${line##* }" != "Specified" ] && [ "${line##* }" != "Unknown" ]; then
 		mlist+=("YES")
 	else
 		mlist+=("NO")
@@ -319,12 +329,19 @@ def findKV(line):
     
     global key, value, num
     i = 1
+    nl=[]
+    num = 0
     for ch in line:
         if ch.isdigit():
             ind1 = i
-            num = int(ch)
+            nl.append(int(ch))
         if ch == ":":
             ind2 = i-1
+            le = len(nl)
+            j = 1
+            for n in nl:
+                num+=n*(10**(le-j))
+                j+=1
             break
         i+=1
     key = line[ind1:ind2]
@@ -360,11 +377,11 @@ def arrToFile(arr):
     file = open("grains.txt", "w")
     file.write(arrToYam(arr))
     
-def cleanup(fileName):
+def cleanup(fileName, filename2):
     
     print("cleaning up...")
     os.remove(fileName)
-    #os.remove("diskInfo.txt")
+    os.remove(filename2)
     
 #linux system disk information collection 
 class linuxC:
@@ -393,7 +410,7 @@ class linuxC:
         fileDataExtraction("diskInfo.txt", platform)
         arrToFile(infoNeeded[platform])
         print("done!")
-        cleanup(scriptName)    
+        cleanup(scriptName, "diskInfo.txt")    
         
 #windows system information collection
 class windowsC:
