@@ -120,6 +120,7 @@ def windowsScript(scriptName):
 		}
         $i++
 	}
+Write-Output "done!"
     """
     
     with open(scriptName, "w") as file:
@@ -139,10 +140,10 @@ do
 	dlist+=("$(echo "$line" | sed 's/ .*//')")
 done <<< "$(lsblk | grep 'disk')"/
 declare -A dInfoNeeded=( 
-	["serialNumber:"]="Serial number:" 
-	["model:"]="Product:" 
-	["manufacturer:"]="Vendor:" 
-	["capacity:"]="User Capacity:")
+	["serialNumber:"]="Serial Number:" 
+	["model:"]="Model Number:" 
+	["capacity:"]="Total NVM Capacity:"
+    ["version:"]="Firmware Version:")
 j=0
 for disk in "${dlist[@]}"
 do
@@ -152,10 +153,18 @@ do
 		while read -r line
 		do
 			if [ "$key" == "capacity:" ] ; then 
-				echo "d$i$key\"$(echo "$line" | sed -E 's/.*\[([^]]+)\].*/\1/')\"" >> diskInfo.txt
-			else
-				echo "d$i$key\"${line##*  }\"" >> diskInfo.txt 
+                line=${line#*[}; line=${line%]*};
+				echo "d$i$key<$line>" >> diskInfo.txt
+			elif [ "$key" == "version:" ] ; then
+                echo "df$i$key<${line##*  }>" >> diskInfo.txt
+                echo "df${i}type:<Firmware>" >> diskInfo.txt
+            else
+				echo "d$i$key<${line##*  }>" >> diskInfo.txt 
 			fi
+            if [ "$key" == "model:" ] ; then 
+                line=${line#*"  "}; line=${line%" "*}; line=${line##*"  "};
+				echo "d${i}manufacturer:<$line>" >> diskInfo.txt
+            fi
 			let "i++"
 		done <<< "$(sudo smartctl -i /dev/${disk} | grep "${dInfoNeeded[$key]}")"
 	done
@@ -193,7 +202,7 @@ for key in "${!mInfoNeeded[@]}"; do
 	do
 		if [ "${mlist[$j]}" == "YES" ] ; then
 			if [ "$(echo "$line" | sed 's/:.*//')" != "Configured Memory Speed" ] ; then
-				echo "m$i$key\"${line##*: }\"" >> diskInfo.txt 
+				echo "m$i$key<${line##*: }>" >> diskInfo.txt 
 				let "i++"
 			fi
 		fi
@@ -236,12 +245,13 @@ for key in "${!pInfoNeeded[@]}"; do
 	while read -r line
 	do
 		if [ "${plist[$j]}" == "YES" ] ; then
-			echo "p$i$key\"${line##*: }\"" >> diskInfo.txt 
+			echo "p$i$key<${line##*: }>" >> diskInfo.txt 
 			let "i++"
 		fi
 		let "j++"
 	done <<< "$(dmidecode --t processor | grep "${pInfoNeeded[$key]}")"
 done
+echo "done!"
 """
     with open(scriptName, "w") as file:
         file.write(script)                                   #//CHANGE TO HAVING A KEY IN FRONT OF IT WHICH MIGHT MAKE THE PREVIOUS COMMENT UNIMPORTANT(resolved)
@@ -256,8 +266,8 @@ def arrToYam(arr):
 
 #will format the information file into a infoNeeded array 
 def fileDataExtraction(input, platform):
-    global dnum, dfnum, mnum, pnum
     file = open(input, "r")
+    codes = {"df":["diskDrives","firmware"], }
     for line in file:
         if (line[:1] != "#"):
             
@@ -333,7 +343,7 @@ def runScript(script, platform):
     if (platform == "windows"):
         subprocess.call(["powershell",script], shell = True, stderr = subprocess.STDOUT)
     elif (platform == "linux"):
-        subprocess.call(["/bin/bash",script], shell=True, stderr=subprocess.STDOUT)
+        subprocess.call(["/bin/bash", script], shell=False, stderr=subprocess.STDOUT)
     
 #creates a blank data structure for later data storage
 def arrayAssembly(platform):
@@ -377,7 +387,6 @@ class linuxC:
         """)
         print("collecting system info...")
         runScript(linuxScript(scriptName), platform)
-        print("done!")
         print("packing into a file...")
         numberOfHardware("diskInfo.txt")
         arrayAssembly(platform)
@@ -407,7 +416,6 @@ class windowsC:
         """)
         print("collecting system info...")
         runScript(windowsScript(scriptName), platform)
-        print("done!")
         print("packing into a file...")
         numberOfHardware("diskInfo.txt")
         arrayAssembly(platform)
