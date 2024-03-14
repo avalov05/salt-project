@@ -139,46 +139,72 @@ while read -r line
 do
 	dlist+=("$(echo "$line" | sed 's/ .*//')")
 done <<< "$(lsblk | grep 'disk')"/
-declare -A dInfoNeeded=( 
+declare -A NVMInfoNeeded=( 
 	["serialNumber:"]="Serial Number:" 
 	["model:"]="Model Number:" 
 	["capacity:"]="Total NVM Capacity:"
     ["version:"]="Firmware Version:"
     ["temprature:"]="Temprature"
     ["healthState:"]="Critical Warning:")
+declare -A SATAInfoNeeded=( 
+	["serialNumber:"]="Serial number:" 
+	["model:"]="Product:" 
+	["capacity:"]="User Capacity:"
+    ["manufacturer:"]="Vendor:"
+    ["temprature:"]="Temprature"
+    ["healthState:"]="unavailable")
 j=0
 for disk in "${dlist[@]}"
 do
-	
-	for key in "${!dInfoNeeded[@]}"; do
-		i=0
-		while read -r line
-		do
-			if [ "$key" == "capacity:" ] ; then 
-                line=${line#*[}; line=${line%]*};
-				echo "d$i$key<$line>" >> diskInfo.txt
-			elif [ "$key" == "version:" ] ; then
-                echo "df$i$key<${line##*  }>" >> diskInfo.txt
-                echo "df${i}type:<Firmware>" >> diskInfo.txt
-            elif [ "$key" == "healthState:" ] ; then 
-                if [ "${line##*  }" == "0x00" ] ; then
-                    echo "d$i$key<OK>" >> diskInfo.txt
-                elif  [ "${line##*  }" == "" ] ; then
-                    echo "d$i$key<N/A>" >> diskInfo.txt
+	if [ ${disk:0:1} == "n" ] ; then
+        for key in "${!NVMInfoNeeded[@]}"; do
+            i=0
+            while read -r line
+            do
+                if [ "$key" == "capacity:" ] ; then 
+                    line=${line#*[}; line=${line%]*};
+                    echo "d$i$key<$line>" >> diskInfo.txt
+                elif [ "$key" == "version:" ] ; then
+                    echo "df$i$key<${line##*  }>" >> diskInfo.txt
+                    echo "df${i}type:<Firmware>" >> diskInfo.txt
+                elif [ "$key" == "healthState:" ] ; then 
+                    if [ "${line##*  }" == "0x00" ] ; then
+                        echo "d$i$key<OK>" >> diskInfo.txt
+                    elif  [ "${line##*  }" == "" ] ; then
+                        echo "d$i$key<N/A>" >> diskInfo.txt
+                    else
+                        echo "d$i$key<NG>" >> diskInfo.txt
+                    fi
                 else
-                    echo "d$i$key<NG>" >> diskInfo.txt
+                    echo "d$i$key<${line##*  }>" >> diskInfo.txt 
                 fi
-            else
-				echo "d$i$key<${line##*  }>" >> diskInfo.txt 
-			fi
-            if [ "$key" == "model:" ] ; then 
-                line=${line#*"  "}; line=${line%" "*}; line=${line##*"  "};
-				echo "d${i}manufacturer:<$line>" >> diskInfo.txt
-            fi
-			let "i++"
-		done <<< "$(sudo smartctl -a /dev/${disk} | grep "${dInfoNeeded[$key]}")"
-	done
-	let "j++"
+                if [ "$key" == "model:" ] ; then 
+                    line=${line#*"  "}; line=${line%" "*}; line=${line##*"  "};
+                    echo "d${i}manufacturer:<$line>" >> diskInfo.txt
+                fi
+                let "i++"
+            done <<< "$(sudo smartctl -a /dev/${disk} | grep "${NVMInfoNeeded[$key]}")"
+        done
+        let "j++"
+    elif [ ${disk:0:1} == "s" ] ; then 
+        for key in "${!SATAInfoNeeded[@]}"; do
+            i=0
+            while read -r line
+            do
+                if [ "$key" == "capacity:" ] ; then 
+                    line=${line#*[}; line=${line%]*};
+                    echo "d$i$key<$line>" >> diskInfo.txt
+                    echo "df${i}type:<Firmware>" >> diskInfo.txt
+                else
+                    echo "d$i$key<${line##*  }>" >> diskInfo.txt 
+                fi
+                let "i++"
+            done <<< "$(sudo smartctl -a /dev/${disk} | grep "${SATAInfoNeeded[$key]}")"
+        done
+        let "j++"
+    else
+        echo "echo "d${i}model:<unsupported>" >> diskInfo.txt"
+    fi
 done
 
 
