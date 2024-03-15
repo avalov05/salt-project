@@ -178,10 +178,6 @@ do
                 else
                     echo "d$i$key<${line##*  }>" >> diskInfo.txt 
                 fi
-                if [ "$key" == "model:" ] ; then 
-                    line=${line#*"  "}; line=${line%" "*}; line=${line##*"  "};
-                    echo "d${i}manufacturer:<$line>" >> diskInfo.txt
-                fi
                 let "i++"
             done <<< "$(sudo smartctl -a /dev/${disk} | grep "${NVMInfoNeeded[$key]}")"
         done
@@ -400,12 +396,17 @@ def arrayAssembly(platform):
         infoNeeded[platform]["processors"].append({})
 
 def arrToFile(arr):
-    file = open("grains.txt", "w")
+    file = open("grains", "w")
     file.write(arrToYam(arr))
     
 def cleanup(fileName, filename2):
     
     print("cleaning up...")
+    with open("grains", "r+") as file:
+        lines = file.readlines()
+        file.seek(0)
+        file.truncate()
+        file.writelines(lines[1:])
     os.remove(fileName)
     os.remove(filename2)
     
