@@ -5,6 +5,14 @@ import yaml
 import json
 import os
 
+
+#--------------------------------------------------
+
+
+class const:
+
+    gPath = sys.argv[1]
+
 #--------------------------------------------------
 
 
@@ -144,14 +152,12 @@ declare -A NVMInfoNeeded=(
 	["model:"]="Model Number:" 
 	["capacity:"]="Total NVM Capacity:"
     ["version:"]="Firmware Version:"
-    ["temprature:"]="Temprature"
     ["healthState:"]="Critical Warning:")
 declare -A SATAInfoNeeded=( 
 	["serialNumber:"]="Serial number:" 
 	["model:"]="Product:" 
 	["capacity:"]="User Capacity:"
     ["manufacturer:"]="Vendor:"
-    ["temprature:"]="Temprature"
     ["healthState:"]="unavailable")
 j=0
 for disk in "${dlist[@]}"
@@ -208,12 +214,14 @@ done
 echo "#Memory:" >> diskInfo.txt
 
 declare -A mInfoNeeded=( 
+    ["displayName:"]="Locator"
 	["serialNumber:"]="Serial Number:" 
 	["capacity:"]="Size:" 
 	["manufacturer:"]="Manufacturer:" 
 	["partNumber:"]="Part Number:" 
 	["slot:"]="Bank Locator:" 
-	["model:"]="Type:" 
+	["model:"]="Type:"
+    ["type:"]="Type:"
 	["speed:"]="Speed:")
 
 i=0
@@ -233,12 +241,13 @@ for key in "${!mInfoNeeded[@]}"; do
 	while read -r line
 	do
 		if [ "${mlist[$j]}" == "YES" ] ; then
-			if [ "$(echo "$line" | sed 's/:.*//')" != "Configured Memory Speed" ] ; then
+			if [ "$(echo "$line" | sed 's/:.*//')" != "Configured Memory Speed" ] && [ "$(echo "$line" | sed 's/:.*//')" != "Bank Locator" ] ; then
+
 				echo "m$i$key<${line##*: }>" >> diskInfo.txt 
 				let "i++"
 			fi
 		fi
-		if [ "$(echo "$line" | sed 's/:.*//')" != "Configured Memory Speed" ] ; then
+		if [ "$(echo "$line" | sed 's/:.*//')" != "Configured Memory Speed" ] && [ "$(echo "$line" | sed 's/:.*//')" != "Bank Locator" ] ; then
 			let "j++"
 		fi	
 	done <<< "$(dmidecode --type 17 | grep "${mInfoNeeded[$key]}")"
@@ -254,7 +263,7 @@ declare -A pInfoNeeded=(
 	["manufacturer:"]="Manufacturer:" 
 	["displayName:"]="Version:" 
 	["socket:"]="Socket Designation:" 
-	["productVerison:"]="Version:" 
+	["productVersion:"]="Version:" 
 	["cores:"]="Core Count:"
 	["maxSpeedMHZ:"]="Max Speed:"
 	["serialNumber:"]="Serial Number:"
@@ -348,7 +357,6 @@ def OS():
 
 #gets key and value from a string
 def findKV(line):
-    
     global key, value, num
     i = 1
     nl=[]
@@ -399,16 +407,18 @@ def arrToFile(arr):
     file = open("grains", "w")
     file.write(arrToYam(arr))
     
-def cleanup(fileName, filename2):
+def cleanup(fileName, filename2, platform):
     
     print("cleaning up...")
+    os.remove(fileName)
+    os.remove(filename2)
+    os.chdir(const.gPath)
+    arrToFile(infoNeeded[platform])
     with open("grains", "r+") as file:
         lines = file.readlines()
         file.seek(0)
         file.truncate()
         file.writelines(lines[1:])
-    os.remove(fileName)
-    os.remove(filename2)
     
 #linux system disk information collection 
 class linuxC:
@@ -435,9 +445,8 @@ class linuxC:
         numberOfHardware("diskInfo.txt")
         arrayAssembly(platform)
         fileDataExtraction("diskInfo.txt", platform)
-        arrToFile(infoNeeded[platform])
         print("done!")
-        cleanup(scriptName, "diskInfo.txt")    
+        cleanup(scriptName, "diskInfo.txt", platform)    
         
 #windows system information collection
 class windowsC:
@@ -466,7 +475,7 @@ class windowsC:
         fileDataExtraction("diskInfo.txt", platform)
         arrToFile(infoNeeded[platform])
         print("done!")
-        cleanup(scriptName)
+        cleanup(scriptName, "diskInfo.txt", platform)
         
 def main():
 
